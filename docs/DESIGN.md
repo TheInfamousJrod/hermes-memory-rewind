@@ -176,10 +176,10 @@ Bodies written by 1.0.0 (`session: a, b` on one line) are still read.
 
 ## In-chat history (`/memory-history`)
 
-A plugin slash command (`ctx.register_command`) that shows the history from the surfaces where
-people actually talk to the agent. Hermes dispatches plugin commands from the CLI chat,
-the messaging gateway and the TUI/Desktop RPC (`command.dispatch`). The versions it
-shows:
+A plugin slash command (`ctx.register_command`) dispatched by CLI chat, the messaging
+gateway and TUI/Desktop RPC. The handler admits only a nonempty native platform plus
+`chat_type="dm"`; registration on a surface does not mean that surface passes this guard.
+When admitted, it shows:
 
 - `/memory-history`: the last 10 versions.
 - `/memory-history <memory|user|soul|skills/<path>>`: the last 10 versions of one target.
@@ -193,8 +193,11 @@ Decisions:
   - The gateway runs each message under its routed profile's scope and runs sync plugin
     handlers on a pool thread with the context copied.
   - The TUI/Desktop wraps `command.dispatch` in the session's home scope.
-  - So each profile sees only its own history. A test drives this through Hermes' own
-    command lookup, and the TUI RPC was checked by hand on v0.21.5 and `main`.
+  - Profile resolution is separate from audience access. Bound TUI/Desktop calls now
+    set platform/chat_type empty and are refused before history lookup. Earlier TUI
+    manual checks predate this guard; they do not verify the changed access behavior.
+  - The classic CLI slash handler has no session binding; ordinary calls are refused.
+    Native host `log`, `show`, `diff` and `restore` remain available.
 - **Read-only.** Viewing never records a version. It waits up to 2 s for a snapshot
   queued at the end of the last turn, so that change is visible. Restore stays a host
   command; the version view prints the exact `hermes memory-rewind restore <version>~1
@@ -206,14 +209,27 @@ Decisions:
     boundary, the budget Hermes' own `/skills diff` uses in chat.
   - A cut reply points at the full `hermes memory-rewind` command. Discord splits
     anything over 2,000 characters itself.
-- **Group chats.**
+- **Audience limits (native b406).**
+  - The gateway binds all session fields around the handler, so explicit group/channel/
+    thread/empty labels are refused even with stale DM fields in process environment.
+  - Telegram private inbound messages construct the plain string `dm`. Slack's event
+    adapter also labels `mpim` (multi-person DM) as `dm`; Matrix uses member-count and
+    direct-room metadata heuristics. Therefore this generic label check alone does not
+    guarantee a one-person audience. Sender authorization remains native policy.
+  - `get_session_env` falls back to process environment when unbound. TUI/Desktop
+    `command.dispatch` permits a missing session and skips binding then; `/api/ws`
+    exposes this RPC after its native authentication/request gates. It is not solely
+    a host CLI fallback, and it is not proof of a private messaging audience.
+  - This candidate needs integration review of enabled adapter semantics and the
+    sessionless RPC path before a private-only claim. No platform restriction or new
+    authorization framework is introduced by these documentation corrections.
   - A reply never includes host paths or raw git errors. Unexpected git failures go to
     the Hermes log and the reply says so. Only messages built from the user's own input
     (an unknown version, an untracked target) are shown.
   - Targets are only memory aliases, `SOUL.md`, `memories/…` and `skills/…`; an absolute
     path is read as a version id and rejected.
-  - What a version changed in memory is visible to everyone in the chat. Hermes' own
-    `/memory pending` shows pending memory writes the same way.
+  - When a reply is admitted, memory changes are visible to every recipient of that
+    conversation. Do not equate read-only output with private output.
 
 ## Restore
 

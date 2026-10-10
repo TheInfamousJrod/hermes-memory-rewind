@@ -1,10 +1,12 @@
-"""`/memory-history`: read-only history from a known direct-message gateway context.
+"""`/memory-history`: read-only history when native session fields report a DM.
 
 Restoring stays a host command (`hermes memory-rewind restore`): a chat message never rewrites
 the agent's knowledge files, and viewing never records a version. Output follows Hermes' own chat
 conventions: plain text, within the 3,000-character budget its `/skills diff` uses in chat. A reply
-must never expose history to a group or an unknown audience. Native host CLI history and
-restore remain available independently of this chat handler.
+is admitted only for a nonempty platform and chat_type="dm". Those fields are not
+independent owner/audience authentication: adapter DM semantics differ, and unbound
+callers can inherit process environment. Native host CLI history and restore remain
+available independently of this chat handler.
 """
 
 from __future__ import annotations
@@ -37,8 +39,8 @@ Restoring is a host command: hermes memory-rewind restore <version> <target>"""
 
 def handle_slash(raw_args: str, ctx) -> str:
     """Slash-command entry point; HERMES_HOME resolves in the caller's (profile-scoped) context."""
-    # The gateway binds task-local context around plugin command handlers. Reading
-    # os.environ directly can borrow another concurrent session's audience.
+    # Bound gateway context overrides process environment, including empty fields.
+    # An unbound caller still falls back to environment; this accessor is not authentication.
     try:
         from gateway.session_context import get_session_env
     except ImportError:

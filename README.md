@@ -56,8 +56,18 @@ names, with `[error]` (or `[blocked]`, `[timeout]`, …) when the call did not s
 
 ### From a chat
 
-`/memory-history` shows the same history from any chat: Telegram, Discord and other
-gateway platforms, the Desktop app, the TUI and the CLI chat. It is read-only.
+`/memory-history` is read-only and requires the native session fields to report a
+nonempty platform and `chat_type="dm"`. Telegram private chats meet that condition.
+Native sender access policy still determines who can invoke the command; the plugin
+does not identify the owner. A DM label is not universal proof of a one-person audience:
+Hermes b406 labels Slack multi-person DMs `dm`, and Matrix uses a room heuristic.
+
+Bound Desktop/TUI slash calls set these fields empty and are refused. Ordinary CLI
+chat lacks the required binding and is normally refused too. Use the host commands
+`hermes memory-rewind log`, `show` or `diff` for local history; restore remains a host
+command. An unbound caller can still inherit session fields from the process environment;
+the native sessionless `command.dispatch` RPC is such a path. This guard is not a general
+authentication or audience-isolation boundary. See the design notes before integration.
 
 ```text
 /memory-history                          the last 10 versions
@@ -142,8 +152,11 @@ plugins:
 
 History keeps what the files contained. If you ask the agent to forget something,
 the removal is recorded, but older versions still contain it. Versions also note session
-ids, platforms and skill names. A `/memory-history` reply in a group chat is visible to
-everyone in it, including what a version changed in memory. Run
+ids, platforms and skill names. Bound group/channel/thread labels are refused before
+history is opened. Adapters that label a multi-person conversation `dm` can still admit
+the reply, and everyone in that conversation can see it, including memory changes.
+Sessionless RPC/environment fallback also requires review before claiming private-only
+access. These are integration limits, not owner authentication. Run
 `hermes memory-rewind forget --yes` to delete the history for the active profile.
 
 ## Limits
