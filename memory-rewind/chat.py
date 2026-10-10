@@ -1,9 +1,10 @@
-"""`/memory-history`: the history, read-only, from any chat surface (CLI, TUI/Desktop, gateway platforms).
+"""`/memory-history`: read-only history from a known direct-message gateway context.
 
 Restoring stays a host command (`hermes memory-rewind restore`): a chat message never rewrites
 the agent's knowledge files, and viewing never records a version. Output follows Hermes' own chat
 conventions: plain text, within the 3,000-character budget its `/skills diff` uses in chat. A reply
-may land in a group chat, so it never carries host paths or raw git errors.
+must never expose history to a group or an unknown audience. Native host CLI history and
+restore remain available independently of this chat handler.
 """
 
 from __future__ import annotations
@@ -36,8 +37,23 @@ Restoring is a host command: hermes memory-rewind restore <version> <target>"""
 
 def handle_slash(raw_args: str, ctx) -> str:
     """Slash-command entry point; HERMES_HOME resolves in the caller's (profile-scoped) context."""
+    # The gateway binds task-local context around plugin command handlers. Reading
+    # os.environ directly can borrow another concurrent session's audience.
+    try:
+        from gateway.session_context import get_session_env
+    except ImportError:
+        return _PRIVATE_HISTORY_NOTICE
+    if (not get_session_env("HERMES_SESSION_PLATFORM", "")
+            or get_session_env("HERMES_SESSION_CHAT_TYPE", "") != "dm"):
+        return _PRIVATE_HISTORY_NOTICE
     from . import read_options, resolve_data_dir, resolve_home
     return render_history(raw_args, resolve_home(), resolve_data_dir(), read_options(ctx))
+
+
+_PRIVATE_HISTORY_NOTICE = (
+    "Memory history is available in a direct message. "
+    "For local access, use hermes memory-rewind log, show or diff."
+)
 
 
 def render_history(raw_args: str, home: Path, data_dir: Path, options: TrackingOptions) -> str:
