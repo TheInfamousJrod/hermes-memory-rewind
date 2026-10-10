@@ -1,12 +1,11 @@
-"""`/memory-history`: read-only history when native session fields report a DM.
+"""`/memory-history`: read-only history in a task-bound Telegram DM.
 
 Restoring stays a host command (`hermes memory-rewind restore`): a chat message never rewrites
 the agent's knowledge files, and viewing never records a version. Output follows Hermes' own chat
 conventions: plain text, within the 3,000-character budget its `/skills diff` uses in chat. A reply
-is admitted only for a nonempty platform and chat_type="dm". Those fields are not
-independent owner/audience authentication: adapter DM semantics differ, and unbound
-callers can inherit process environment. Native host CLI history and restore remain
-available independently of this chat handler.
+is admitted only for Telegram's verified private-chat mapping. Other adapter DM
+semantics are not equivalent. Native sender policy still controls who may invoke it;
+this is not owner authentication. Host CLI history and restore remain independent.
 """
 
 from __future__ import annotations
@@ -39,22 +38,29 @@ Restoring is a host command: hermes memory-rewind restore <version> <target>"""
 
 def handle_slash(raw_args: str, ctx) -> str:
     """Slash-command entry point; HERMES_HOME resolves in the caller's (profile-scoped) context."""
-    # Bound gateway context overrides process environment, including empty fields.
-    # An unbound caller still falls back to environment; this accessor is not authentication.
+    # Require task-bound fields, never inherited process environment. Older native
+    # APIs cannot establish this contract and get a host-command/upgrade pointer.
     try:
         from gateway.session_context import get_session_env
-    except ImportError:
-        return _PRIVATE_HISTORY_NOTICE
-    if (not get_session_env("HERMES_SESSION_PLATFORM", "")
-            or get_session_env("HERMES_SESSION_CHAT_TYPE", "") != "dm"):
+        platform = get_session_env("HERMES_SESSION_PLATFORM", "", allow_env_fallback=False)
+        chat_type = get_session_env("HERMES_SESSION_CHAT_TYPE", "", allow_env_fallback=False)
+    except (ImportError, TypeError):
+        return _CONTEXT_API_NOTICE
+    if platform != "telegram" or chat_type != "dm":
         return _PRIVATE_HISTORY_NOTICE
     from . import read_options, resolve_data_dir, resolve_home
     return render_history(raw_args, resolve_home(), resolve_data_dir(), read_options(ctx))
 
 
 _PRIVATE_HISTORY_NOTICE = (
-    "Memory history is available in a direct message. "
+    "Chat memory history is available only in a Telegram direct message. "
     "For local access, use hermes memory-rewind log, show or diff."
+)
+
+_CONTEXT_API_NOTICE = (
+    "Chat memory history requires Hermes support for task-bound session reads "
+    "(get_session_env allow_env_fallback=False). Upgrade to a version with that API; "
+    "meanwhile use hermes memory-rewind log, show or diff on the host."
 )
 
 

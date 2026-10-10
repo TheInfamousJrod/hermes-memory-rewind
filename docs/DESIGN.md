@@ -177,8 +177,12 @@ Bodies written by 1.0.0 (`session: a, b` on one line) are still read.
 ## In-chat history (`/memory-history`)
 
 A plugin slash command (`ctx.register_command`) dispatched by CLI chat, the messaging
-gateway and TUI/Desktop RPC. The handler admits only a nonempty native platform plus
-`chat_type="dm"`; registration on a surface does not mean that surface passes this guard.
+gateway and TUI/Desktop RPC. This candidate admits only task-bound native platform
+`telegram` plus `chat_type="dm"`; registration does not mean a surface passes the guard.
+It requires the proposed public `get_session_env(..., allow_env_fallback=False)` API;
+an older API produces a refusal with an upgrade/host-command pointer. Other adapter
+surfaces are explicitly unsupported pending audience verification, a restriction of
+the upstream plugin's wider chat convenience. This is not a live adopted release.
 When admitted, it shows:
 
 - `/memory-history`: the last 10 versions.
@@ -196,7 +200,7 @@ Decisions:
   - Profile resolution is separate from audience access. Bound TUI/Desktop calls now
     set platform/chat_type empty and are refused before history lookup. Earlier TUI
     manual checks predate this guard; they do not verify the changed access behavior.
-  - The classic CLI slash handler has no session binding; ordinary calls are refused.
+  - The classic CLI slash handler has no session binding; calls are refused.
     Native host `log`, `show`, `diff` and `restore` remain available.
 - **Read-only.** Viewing never records a version. It waits up to 2 s for a snapshot
   queued at the end of the last turn, so that change is visible. Restore stays a host
@@ -215,14 +219,20 @@ Decisions:
   - Telegram private inbound messages construct the plain string `dm`. Slack's event
     adapter also labels `mpim` (multi-person DM) as `dm`; Matrix uses member-count and
     direct-room metadata heuristics. Therefore this generic label check alone does not
-    guarantee a one-person audience. Sender authorization remains native policy.
+    guarantee a one-person audience. The candidate therefore admits only the verified
+    Telegram mapping; sender authorization remains native policy, independently.
   - `get_session_env` falls back to process environment when unbound. TUI/Desktop
     `command.dispatch` permits a missing session and skips binding then; `/api/ws`
     exposes this RPC after its native authentication/request gates. It is not solely
-    a host CLI fallback, and it is not proof of a private messaging audience.
-  - This candidate needs integration review of enabled adapter semantics and the
-    sessionless RPC path before a private-only claim. No platform restriction or new
-    authorization framework is introduced by these documentation corrections.
+    a host CLI fallback, and it is not proof of a private messaging audience. The
+    opt-in public bound-only read returns the default on that unbound path, so the
+    plugin refuses even with stale environment. The native default is unchanged for
+    other consumers. No private ContextVar access, process latch or new authorization
+    framework is used.
+  - This source-only proposal preserves the accepted Wren Telegram owner-DM history
+    and native host log/show/diff/restore outcome. Wider slash convenience is not
+    advertised as preserved. Owner-only native sender policy and live delivery still
+    require representative acceptance; this guard alone does not establish either.
   - A reply never includes host paths or raw git errors. Unexpected git failures go to
     the Hermes log and the reply says so. Only messages built from the user's own input
     (an unknown version, an untracked target) are shown.

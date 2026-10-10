@@ -56,18 +56,25 @@ names, with `[error]` (or `[blocked]`, `[timeout]`, …) when the call did not s
 
 ### From a chat
 
-`/memory-history` is read-only and requires the native session fields to report a
-nonempty platform and `chat_type="dm"`. Telegram private chats meet that condition.
-Native sender access policy still determines who can invoke the command; the plugin
-does not identify the owner. A DM label is not universal proof of a one-person audience:
-Hermes b406 labels Slack multi-person DMs `dm`, and Matrix uses a room heuristic.
+This candidate restricts `/memory-history` to Telegram direct messages using
+task-bound native session fields. It requires Hermes' proposed public
+`get_session_env(..., allow_env_fallback=False)` API. On older Hermes, chat history
+refuses with an upgrade/host-command pointer; recording and host commands still work.
+No released version or live installation of that API is claimed here.
+
+This is an explicit restriction of the upstream plugin's wider chat convenience,
+pending review, not an adopted live pin. Other platforms are unsupported until their
+audience mappings are verified: Hermes b406 labels Slack multi-person DMs `dm`, and
+Matrix uses a room heuristic. Native sender policy still controls who can invoke the
+command; the plugin does not identify the owner. Owner-only sender policy must be
+verified separately before claiming owner-only history.
 
 Bound Desktop/TUI slash calls set these fields empty and are refused. Ordinary CLI
-chat lacks the required binding and is normally refused too. Use the host commands
+chat lacks the required binding and is refused too. Use the host commands
 `hermes memory-rewind log`, `show` or `diff` for local history; restore remains a host
-command. An unbound caller can still inherit session fields from the process environment;
-the native sessionless `command.dispatch` RPC is such a path. This guard is not a general
-authentication or audience-isolation boundary. See the design notes before integration.
+command. Unbound callers, including native sessionless `command.dispatch`, are refused
+even if process environment contains stale Telegram DM fields. This audience guard
+does not replace native sender authorization. See the design notes before integration.
 
 ```text
 /memory-history                          the last 10 versions
@@ -152,11 +159,9 @@ plugins:
 
 History keeps what the files contained. If you ask the agent to forget something,
 the removal is recorded, but older versions still contain it. Versions also note session
-ids, platforms and skill names. Bound group/channel/thread labels are refused before
-history is opened. Adapters that label a multi-person conversation `dm` can still admit
-the reply, and everyone in that conversation can see it, including memory changes.
-Sessionless RPC/environment fallback also requires review before claiming private-only
-access. These are integration limits, not owner authentication. Run
+ids, platforms and skill names. Group/channel/thread labels, non-Telegram platforms
+and unbound callers are refused before history is opened. Telegram DM admission still
+relies on the native sender policy; the plugin itself does not authenticate the owner. Run
 `hermes memory-rewind forget --yes` to delete the history for the active profile.
 
 ## Limits

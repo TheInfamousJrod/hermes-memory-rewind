@@ -1,6 +1,8 @@
 """Audience checks at the registered handler; all data and context are synthetic."""
 import argparse
+import contextvars
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import types
@@ -22,7 +24,8 @@ class AudienceTests(unittest.TestCase):
     def test_group_and_unknown_are_refused_before_history_access(self):
         for platform, chat_type in (('telegram', 'group'), ('telegram', 'channel'),
                                     ('telegram', 'thread'), ('telegram', ''),
-                                    ('', ''), ('', 'dm'), ('telegram', 'unknown')):
+                                    ('', ''), ('', 'dm'), ('telegram', 'unknown'),
+                                    ('slack', 'dm'), ('matrix', 'dm'), ('discord', 'dm')):
             with self.subTest(platform=platform, chat_type=chat_type):
                 with self.context(platform, chat_type), patch.object(
                     package, 'resolve_home', side_effect=AssertionError('history accessed')
@@ -35,7 +38,40 @@ class AudienceTests(unittest.TestCase):
         with patch.dict(sys.modules, {'gateway.session_context': None}), patch.object(
             package, 'resolve_home', side_effect=AssertionError('history accessed')
         ):
-            self.assertEqual(chat.handle_slash('', Mock()), chat._PRIVATE_HISTORY_NOTICE)
+            self.assertEqual(chat.handle_slash('', Mock()), chat._CONTEXT_API_NOTICE)
+
+    def test_old_api_is_refused_before_history_access(self):
+        module = types.ModuleType('gateway.session_context')
+        module.get_session_env = lambda key, default='': 'telegram' if key.endswith('PLATFORM') else 'dm'
+        with patch.dict(sys.modules, {'gateway.session_context': module}), patch.object(
+            package, 'resolve_home', side_effect=AssertionError('history accessed')):
+            self.assertEqual(chat.handle_slash('', Mock()), chat._CONTEXT_API_NOTICE)
+
+    def test_actual_native_api_refuses_unbound_stale_dm_and_allows_bound_telegram(self):
+        root = os.environ.get('RM72_NATIVE_SOURCE')
+        if not root:
+            self.skipTest('set RM72_NATIVE_SOURCE to the matching native candidate checkout')
+        spec = importlib.util.spec_from_file_location('gateway.session_context', Path(root) / 'gateway/session_context.py')
+        context = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(context)
+        with patch.dict(sys.modules, {'gateway.session_context': context}), patch.dict(
+            os.environ, {'HERMES_SESSION_PLATFORM': 'telegram', 'HERMES_SESSION_CHAT_TYPE': 'dm'}):
+            def check():
+                with patch.object(package, 'resolve_home', side_effect=AssertionError('history accessed')):
+                    self.assertEqual(chat.handle_slash('', Mock()), chat._PRIVATE_HISTORY_NOTICE)
+                    context.set_session_vars(platform='', chat_type='')
+                    self.assertEqual(chat.handle_slash('', Mock()), chat._PRIVATE_HISTORY_NOTICE)
+                    # Native Slack's mpim path reports dm; the candidate must still deny it.
+                    context.set_session_vars(platform='slack', chat_type='dm')
+                    self.assertEqual(chat.handle_slash('', Mock()), chat._PRIVATE_HISTORY_NOTICE)
+                context.set_session_vars(platform='telegram', chat_type='dm')
+                with patch.object(package, 'resolve_home', return_value=Path('/SYNTHETIC-home')), patch.object(
+                    package, 'resolve_data_dir', return_value=Path('/SYNTHETIC-data')), patch.object(
+                    package, 'read_options', return_value='SYNTHETIC-options'), patch.object(
+                    chat, 'render_history', return_value='SYNTHETIC history') as render:
+                    self.assertEqual(chat.handle_slash('', Mock()), 'SYNTHETIC history')
+                    render.assert_called_once()
+            contextvars.Context().run(check)
 
     def test_dm_keeps_exact_history_delegate(self):
         with self.context('telegram', 'dm'), patch.object(package, 'resolve_home',
@@ -73,7 +109,11 @@ class AudienceTests(unittest.TestCase):
     def context(platform, chat_type):
         module = types.ModuleType('gateway.session_context')
         values = {'HERMES_SESSION_PLATFORM': platform, 'HERMES_SESSION_CHAT_TYPE': chat_type}
-        module.get_session_env = lambda key, default='': values.get(key, default)
+        def get_session_env(key, default='', *, allow_env_fallback=True):
+            if allow_env_fallback:
+                raise AssertionError('plugin must disable environment fallback')
+            return values.get(key, default)
+        module.get_session_env = get_session_env
         return patch.dict(sys.modules, {'gateway.session_context': module})
 
 if __name__ == '__main__':
