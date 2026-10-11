@@ -69,6 +69,12 @@ Matrix uses a room heuristic. Native sender policy still controls who can invoke
 command; the plugin does not identify the owner. Owner-only sender policy must be
 verified separately before claiming owner-only history.
 
+Deployment condition: the relay adapter must be disabled, or the relay's Telegram
+`chat_type` provenance must be verified. Relayed sources carry the underlying platform
+label too; the plugin cannot distinguish them from local Telegram sources through
+these session fields. The verified local adapter mapping does not cover relay input.
+This deployment condition and owner-only delivery are NOT VERIFIED by the source tests.
+
 Bound Desktop/TUI slash calls set these fields empty and are refused. Ordinary CLI
 chat lacks the required binding and is refused too. Use the host commands
 `hermes memory-rewind log`, `show` or `diff` for local history; restore remains a host
@@ -188,9 +194,19 @@ PYTHONPATH=/path/to/hermes-agent python -m pytest tests/  # plus end-to-end test
 The end-to-end tests load the plugin through Hermes' real plugin manager, drive the real
 memory tool and hook dispatch, run the `hermes` CLI, and check that separate profiles
 keep separate histories.
+The chat integration check expects refusal on Hermes without the proposed bound-only
+API (including v0.21.5 and inspected b406). With the candidate API, it checks unbound
+refusal and profile separation under an explicitly bound Telegram DM context. The
+full suite has not yet been run against this unreleased candidate; focused audience
+checks alone do not establish full-suite or live-delivery acceptance.
 
 ## Changes
 
+- **Unreleased candidate (not activated):** restrict `/memory-history` to task-bound
+  Telegram DM fields, requiring the proposed native bound-only getter. Older APIs,
+  unbound callers and other chat surfaces refuse with a host-command pointer. Native
+  host history/restore and recording remain unchanged. Relay provenance and owner-only
+  sender policy require separate deployment verification; no version bump or release.
 - **1.3.2**: **Fix:** `restore` could replace what a running agent had just written. It
   now applies only the plan it showed: it holds the memory tool's own lock on `MEMORY.md`
   or `USER.md` while it checks and writes, and it refuses when a file changed after the

@@ -221,6 +221,14 @@ Decisions:
     direct-room metadata heuristics. Therefore this generic label check alone does not
     guarantee a one-person audience. The candidate therefore admits only the verified
     Telegram mapping; sender authorization remains native policy, independently.
+  - Relay input retains the underlying platform label. In b406,
+    `gateway/relay/ws_transport.py::_event_from_wire` takes `chat_type` from the wire
+    (defaulting to `dm`) and stamps `delivered_via_upstream_relay=True` locally.
+    `_set_session_env` binds the platform and chat type, but not that relay flag.
+    This plugin therefore cannot distinguish relayed `telegram`/`dm` from a local
+    Telegram private message. Deployment requires the relay adapter to be disabled,
+    or its Telegram chat-type provenance independently verified. The local Telegram
+    adapter evidence does not cover relay sources; this condition remains NOT VERIFIED.
   - `get_session_env` falls back to process environment when unbound. TUI/Desktop
     `command.dispatch` permits a missing session and skips binding then; `/api/ws`
     exposes this RPC after its native authentication/request gates. It is not solely
@@ -298,10 +306,15 @@ are out of scope.
   the real `memory` tool and hook dispatch, call `skill_manage` through Hermes'
   own dispatcher and global hook bus (so the provenance comes from the payload
   Hermes really sends), check multiplexed profiles keep separate histories
-  (for recording and for `/memory-history`), and run
-  `hermes memory-rewind log/restore/status` as a subprocess. They run against
-  the minimum supported release (v0.21.5) and `main`.
-- Each safety property is mutation-checked: disabling it makes at least one
-  test fail.
-- `hermes plugins validate` (including the install-time security scan) and
-  `hermes plugins doctor --ci` pass.
+  for recording, and run `hermes memory-rewind log/restore/status` as a subprocess.
+  `/memory-history` profile separation requires the proposed bound-only getter and
+  an explicitly bound Telegram DM context. On versions without that API (including
+  v0.21.5 and inspected b406), the real-handler test instead expects an upgrade/host
+  refusal before history access. It does not stub admission into older Hermes.
+- Candidate evidence so far: six focused plugin audience tests and four native API
+  tests passed with synthetic input. The existing full plugin suite has NOT been run
+  against this candidate. The integration-test correction is source-reviewed only
+  until that suite runs in an existing Hermes environment with pytest.
+- Prior upstream mutation checks, plugin validation and `doctor --ci` results do not
+  establish acceptance for this unreleased candidate. No live Telegram/relay delivery,
+  owner-only sender policy or installation is verified by the source tests.
