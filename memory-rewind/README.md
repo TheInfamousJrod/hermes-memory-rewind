@@ -196,9 +196,11 @@ memory tool and hook dispatch, run the `hermes` CLI, and check that separate pro
 keep separate histories.
 The chat integration check expects refusal on Hermes without the proposed bound-only
 API (including v0.21.5 and inspected b406). With the candidate API, it checks unbound
-refusal and profile separation under an explicitly bound Telegram DM context. The
-full suite has not yet been run against this unreleased candidate; focused audience
-checks alone do not establish full-suite or live-delivery acceptance.
+refusal and profile separation under an explicitly bound Telegram DM context.
+The full suite passed against the candidate native API (plugin `47951870`, native
+`f1476c0155`: 188 passed, zero skips), including real native CLI calls with synthetic
+homes. That run did not exercise the integration check's old-API refusal branch.
+It does not establish live delivery, sender policy or relay provenance.
 
 ## Changes
 

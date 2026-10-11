@@ -3,8 +3,9 @@
 Restoring stays a host command (`hermes memory-rewind restore`): a chat message never rewrites
 the agent's knowledge files, and viewing never records a version. Output follows Hermes' own chat
 conventions: plain text, within the 3,000-character budget its `/skills diff` uses in chat. A reply
-is admitted only for Telegram's verified private-chat mapping. Other adapter DM
-semantics are not equivalent. Native sender policy still controls who may invoke it;
+is admitted for task-bound Telegram DM labels. Relay-sourced labels are not
+distinguished; see the README deployment condition. Other adapter DM semantics
+are not equivalent. Native sender policy still controls who may invoke it;
 this is not owner authentication. Host CLI history and restore remain independent.
 """
 

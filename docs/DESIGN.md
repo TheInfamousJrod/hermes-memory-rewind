@@ -311,10 +311,12 @@ are out of scope.
   an explicitly bound Telegram DM context. On versions without that API (including
   v0.21.5 and inspected b406), the real-handler test instead expects an upgrade/host
   refusal before history access. It does not stub admission into older Hermes.
-- Candidate evidence so far: six focused plugin audience tests and four native API
-  tests passed with synthetic input. The existing full plugin suite has NOT been run
-  against this candidate. The integration-test correction is source-reviewed only
-  until that suite runs in an existing Hermes environment with pytest.
+- Candidate evidence: the full plugin suite passed against the proposed native API
+  (plugin `47951870`, native `f1476c0155`: 188 passed, zero skips), including the real
+  plugin manager, memory/hook paths and native CLI under synthetic homes. The native
+  candidate's five focused tests also passed separately. This is not 193 native tests.
+  The integration check's old-API refusal branch was not exercised in that run;
+  missing/old API refusal has focused unit coverage and source review.
 - Prior upstream mutation checks, plugin validation and `doctor --ci` results do not
   establish acceptance for this unreleased candidate. No live Telegram/relay delivery,
   owner-only sender policy or installation is verified by the source tests.
